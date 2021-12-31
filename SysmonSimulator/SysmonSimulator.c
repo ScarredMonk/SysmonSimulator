@@ -10,10 +10,20 @@
 #include <dbghelp.h>
 #include <tlhelp32.h>
 #include <time.h>
+#include <wbemidl.h>
+#include <stdlib.h>
+#include <fltuser.h>
+#include <Winternl.h>
+
 
 #pragma comment(lib,"WS2_32")
 #pragma comment(lib,"dnsapi")
 #pragma comment(lib, "ntdll")
+#pragma comment(lib, "wbemuuid")
+//#pragma comment(lib,"FltLib.lib")
+
+
+#define _WIN32_DCOM
 
 EXTERN_C NTSTATUS NTAPI NtTerminateProcess(HANDLE, NTSTATUS);
 EXTERN_C NTSTATUS NTAPI NtReadVirtualMemory(HANDLE, PVOID, PVOID, ULONG, PULONG);
@@ -22,6 +32,13 @@ EXTERN_C NTSTATUS NTAPI NtGetContextThread(HANDLE, PCONTEXT);
 EXTERN_C NTSTATUS NTAPI NtSetContextThread(HANDLE, PCONTEXT);
 EXTERN_C NTSTATUS NTAPI NtUnmapViewOfSection(HANDLE, PVOID);
 EXTERN_C NTSTATUS NTAPI NtResumeThread(HANDLE, PULONG);
+
+//typedef NTSTATUS(*_NtLoadDriver)(IN PUNICODE_STRING DriverServiceName);
+
+//typedef NTSTATUS(WINAPI* _RtlAdjustPrivilege)(
+//    ULONG Privilege, BOOL Enable,
+//    BOOL CurrentThread, PULONG Enabled);
+
 
 typedef NTSTATUS(WINAPI* _NtQueryInformationProcess) (
     HANDLE,
@@ -57,7 +74,7 @@ void printText(char* ptr, WORD newColor) {
 
 int ProcessCreate1() {
 
-    LPSTR cmdline = "calc.exe";
+    LPSTR cmdline = "C:\\Windows\\System32\\wbem\\WMIC.exe";
     HANDLE hProcess = INVALID_HANDLE_VALUE;
     STARTUPINFOA sinfo = { 0 };
     sinfo.cb = sizeof(STARTUPINFOA);
@@ -71,7 +88,7 @@ int ProcessCreate1() {
             return 0;
         }
         else {
-            printf("[+] Process Name : calc.exe\n");
+            printf("[+] Process Name : C:\\Windows\\System32\\wbem\\WMIC.exe\n");
             int createdPID = pinfo.dwProcessId;
             printf("[+] Process ID   : %d \n", pinfo.dwProcessId);
             CloseHandle(pinfo.hProcess);
@@ -155,31 +172,50 @@ int processtermination5(process_id)
 }
 
 int driverLoad6() {
-    //UNICODE_STRING RegPath;
-    //NTSTATUS Status;
-    ///* Try to load ourself */
-    //RtlInitUnicodeString(&RegPath, L"\\Registry\\Machine\\System\\CurrentControlSet\\Services\\HTTP");
-    ///* Load the driver */
-    //
-    //Status = ZwLoadDriver(&RegPath);
-    //
-    //return NT_SUCCESS(Status);
-    return 0;
+    printText("\nHint: \n\n", FOREGROUND_GREEN);
+    printf(" -> Go to Settings >> Windows Security >> Virus & threat protection settings  \n -> Disable Real-time protection \n -> Enable Real-time protection\n\n");
+    printText(" This will load C:\\Windows\\System32\\drivers\\wd\\WdNisDrv.sys which is Microsoft Network Realtime Inspection Driver file\n", FOREGROUND_GREEN);
 
+    //ULONG t;
+    //HRESULT load;
+    //HRESULT unload;
+    //LPCWSTR driver = L"SysmonDrv";
+    //_RtlAdjustPrivilege RtlAdjustPrivilege = (_RtlAdjustPrivilege)GetProcAddress(GetModuleHandle(L"ntdll"), "RtlAdjustPrivilege");
+
+    //RtlAdjustPrivilege(012, TRUE, FALSE, &t);
+    //unload = FilterUnload(driver);
+    //wprintf(L"%ls", unload == S_OK ?
+    //    L"Sysmon Driver unloaded successfully \n" :
+    //    L"An Error Occured. Check Privs\n"
+    //);
+
+    //load = ZwloadDriver(driver);
+    //wprintf(L"%ls", load == S_OK ?
+    //    L"Sysmon Driver loaded back successfully\n" :
+    //    L"An Error Occured. Check Privs\n"
+    //);
+
+    return 0;
 }
 
 int ImageLoaded7() {
-    HMODULE hntdll = LoadLibraryA("GameChatOverlayExt.dll");
+    HMODULE hntdll = LoadLibraryA("crypt32.dll");
     if (hntdll) {
-        wprintf(L"[+] Image Loaded : Loaded GameChatOverlayExt.dll\n");
+        wprintf(L"[+] Image Loaded : Loaded crypt32.dll\n");
     }
     return 0;
 }
 
-int createRemoteThread8(int process_id) {
+int createRemoteThread8() {
     HANDLE processHandle;
     HANDLE rThread;
     PVOID buff;
+    LPSTR cmdline = "C:\\Windows\\System32\\PING.exe";
+    HANDLE hProcess = INVALID_HANDLE_VALUE;
+    STARTUPINFOA sinfo = { 0 };
+    sinfo.cb = sizeof(STARTUPINFOA);
+    PROCESS_INFORMATION pinfo = { 0 };
+
 
     //Messagebox Shellcode
     unsigned char shellcode[] =
@@ -213,27 +249,37 @@ int createRemoteThread8(int process_id) {
         "\x4C\x4C\x00\x49\x8B\xCC\x41\xFF\xD7\x49\x8B\xCC\x48\x8B\xD6"
         "\xE9\x14\xFF\xFF\xFF\x48\x03\xC3\x48\x83\xC4\x28\xC3";
 
-    printf("[+] Inject into  : PID %i\n", process_id);
 
-    processHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, process_id);
-    printf("[+] Opened process's handle\n");
+    if (hProcess == INVALID_HANDLE_VALUE) {
+        if (CreateProcessA(NULL, cmdline, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &sinfo, &pinfo)) {
+            int process_id = pinfo.dwProcessId;
+            printf("[+] Inject into  : PID %i\n", process_id);
 
-    buff = VirtualAllocEx(processHandle, NULL, sizeof(shellcode), (MEM_RESERVE | MEM_COMMIT), PAGE_EXECUTE_READWRITE);
+            processHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, process_id);
+            printf("[+] Opened process's handle\n");
 
-    if (buff) {
-        WriteProcessMemory(processHandle, buff, shellcode, sizeof(shellcode), NULL);
-        rThread = CreateRemoteThread(processHandle, NULL, 0, (LPTHREAD_START_ROUTINE)buff, NULL, 0, NULL);
-        printf("[+] Created Remote Thread\n");
-        CloseHandle(processHandle);
-        printf("[+] Closed Handle to the process\n");
+            buff = VirtualAllocEx(processHandle, NULL, sizeof(shellcode), (MEM_RESERVE | MEM_COMMIT), PAGE_EXECUTE_READWRITE);
+
+            if (buff) {
+                WriteProcessMemory(processHandle, buff, shellcode, sizeof(shellcode), NULL);
+                rThread = CreateRemoteThread(processHandle, NULL, 0, (LPTHREAD_START_ROUTINE)buff, NULL, 0, NULL);
+                printf("[+] Created Remote Thread\n");
+                printf("[+] Closed Handle to the process\n");
+            }
+            else {
+                printf("[-] Error code is : %d\n", GetLastError());
+            }
+
+            CloseHandle(pinfo.hProcess);
+            CloseHandle(pinfo.hThread);
+        }
     }
-    else {
-        printf("[-] Error code is : %d\n", GetLastError());
-    }
+
     return 0;
 }
 
 int processaccess10(process_id) {
+
     printf("Opening process with PID: %lu\n", process_id);
     HANDLE hProcessToAccess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, process_id);
     if (!hProcessToAccess) {
@@ -589,6 +635,65 @@ int processTampering25()
     return 0;
 }
 
+void wmiactivity()
+{
+    // result code from COM calls
+    HRESULT hr = 0;
+
+    // COM interface pointers
+    IWbemLocator* locator = NULL;
+    IWbemServices* services = NULL;
+    IEnumWbemClassObject* results = NULL;
+
+    // BSTR strings we'll use (http://msdn.microsoft.com/en-us/library/ms221069.aspx)
+    BSTR resource = SysAllocString(L"ROOT\\CIMV2");
+    BSTR language = SysAllocString(L"WQL");
+    BSTR query = SysAllocString(L"SELECT * FROM Win32_Processor");
+
+    // initialize COM
+    hr = CoInitializeEx(0, COINIT_MULTITHREADED);
+    hr = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
+
+    // connect to WMI
+    hr = CoCreateInstance(&CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, &IID_IWbemLocator, (LPVOID*)&locator);
+    hr = locator->lpVtbl->ConnectServer(locator, resource, NULL, NULL, NULL, 0, NULL, NULL, &services);
+
+    // issue a WMI query
+    hr = services->lpVtbl->ExecQuery(services, language, query, WBEM_FLAG_BIDIRECTIONAL, NULL, &results);
+
+    // list the query results
+    if (results != NULL) {
+        IWbemClassObject* result = NULL;
+        ULONG returnedCount = 0;
+
+        // enumerate the retrieved objects
+        while ((hr = results->lpVtbl->Next(results, WBEM_INFINITE, 1, &result, &returnedCount)) == S_OK) {
+            VARIANT name;
+            VARIANT speed;
+
+            // obtain the desired properties of the next result and print them out
+            hr = result->lpVtbl->Get(result, L"Name", 0, &name, 0, 0);
+            hr = result->lpVtbl->Get(result, L"MaxClockSpeed", 0, &speed, 0, 0);
+            wprintf(L"%s, %dMHz\r\n", name.bstrVal, speed.intVal);
+
+            // release the current result object
+            result->lpVtbl->Release(result);
+        }
+    }
+
+    // release WMI COM interfaces
+    results->lpVtbl->Release(results);
+    services->lpVtbl->Release(services);
+    locator->lpVtbl->Release(locator);
+
+    // unwind everything else we've allocated
+    CoUninitialize();
+
+    SysFreeString(query);
+    SysFreeString(language);
+    SysFreeString(resource);
+}
+
 
 void timestamp()
 {
@@ -785,11 +890,10 @@ int main(int argc, char* argv[]) {
         break;
 
     case 6:
-        printf("[+] Simulation   : Started successfully\n"); //Not working right now
+        //printf("[+] Simulation   : Started successfully\n"); //Not working right now
         printf("[+] Event ID     : 6\n");
         printf("[+] Event Name   : Driver Load Event\n");
         driverLoad6();
-        checkEvent(eid);
         break;
 
     case 7:
@@ -802,12 +906,12 @@ int main(int argc, char* argv[]) {
         break;
 
     case 8:
-        printf("Enter the process ID of remote process to create a remote thread in it:\n>");
-        scanf_s("%d", &process_id);
+        //printf("Enter the process ID of remote process to create a remote thread in it:\n>");
+        //scanf_s("%d", &process_id);
         printf("[+] Simulation   : Started successfully\n");
         printf("[+] Event ID     : 8\n");
         printf("[+] Event Name   : Create Remote Thread Event\n");
-        createRemoteThread8(process_id);
+        createRemoteThread8();
         checkEvent(eid);
         break;
 
@@ -844,6 +948,7 @@ int main(int argc, char* argv[]) {
         printf("[+] Event Name   : Registry Event\n");
         registryEvent13();
         checkEvent(eid);
+        system("whoami");
         break;
     case 14:
         printf("[+] Simulation   : Started successfully\n");
@@ -871,6 +976,13 @@ int main(int argc, char* argv[]) {
         printf("[+] Event ID     : 18\n");
         printf("[+] Event Name   : Pipe Connection Event\n");
         pipeConnect18();
+        checkEvent(eid);
+        break;
+    case 19:
+        printf("[+] Simulation   : Started successfully\n");
+        printf("[+] Event ID     : 19\n");
+        printf("[+] Event Name   : WmiEvent\n");
+        wmiactivity();
         checkEvent(eid);
         break;
     case 22:
