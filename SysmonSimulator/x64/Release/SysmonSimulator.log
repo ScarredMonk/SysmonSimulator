@@ -1,0 +1,6 @@
+﻿  SysmonSimulator.c
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 37 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  SysmonSimulator.vcxproj -> C:\Users\scarredmonk\source\repos\SysmonSimulator\SysmonSimulator\x64\Release\SysmonSimulator.exe

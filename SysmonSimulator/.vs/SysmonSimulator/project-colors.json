@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "ProjectMap": {
+    "23368b49-dc92-49e8-aec9-5a340c6eb867": {
+      "ProjectGuid": "23368b49-dc92-49e8-aec9-5a340c6eb867",
+      "DisplayName": "SysmonSimulator",
+      "ColorIndex": 0
+    }
+  },
+  "NextColorIndex": 1
+}
