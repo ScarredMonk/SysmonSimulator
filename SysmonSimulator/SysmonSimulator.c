@@ -1,27 +1,15 @@
 #include <winsock.h>
 #include <windows.h>
 #include <stdio.h>
-#include <string.h>
 #include <windns.h>
-#include <tchar.h>
 #include <winternl.h>
-#include <winnt.h>
 #include <tchar.h>
-#include <dbghelp.h>
-#include <tlhelp32.h>
-#include <time.h>
 #include <wbemidl.h>
-#include <stdlib.h>
-#include <fltuser.h>
-#include <Winternl.h>
-
 
 #pragma comment(lib,"WS2_32")
 #pragma comment(lib,"dnsapi")
 #pragma comment(lib, "ntdll")
 #pragma comment(lib, "wbemuuid")
-//#pragma comment(lib,"FltLib.lib")
-
 
 #define _WIN32_DCOM
 
@@ -32,13 +20,6 @@ EXTERN_C NTSTATUS NTAPI NtGetContextThread(HANDLE, PCONTEXT);
 EXTERN_C NTSTATUS NTAPI NtSetContextThread(HANDLE, PCONTEXT);
 EXTERN_C NTSTATUS NTAPI NtUnmapViewOfSection(HANDLE, PVOID);
 EXTERN_C NTSTATUS NTAPI NtResumeThread(HANDLE, PULONG);
-
-//typedef NTSTATUS(*_NtLoadDriver)(IN PUNICODE_STRING DriverServiceName);
-
-//typedef NTSTATUS(WINAPI* _RtlAdjustPrivilege)(
-//    ULONG Privilege, BOOL Enable,
-//    BOOL CurrentThread, PULONG Enabled);
-
 
 typedef NTSTATUS(WINAPI* _NtQueryInformationProcess) (
     HANDLE,
@@ -61,18 +42,38 @@ typedef struct BASE_RELOCATION_ENTRY {
 
 
 void printText(char* ptr, WORD newColor) {
+
     HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-    WORD saved_attributes;
-    GetConsoleScreenBufferInfo(hConsole, &consoleInfo);
-    saved_attributes = consoleInfo.wAttributes;
-    SetConsoleTextAttribute(hConsole, newColor);
+    CONSOLE_SCREEN_BUFFER_INFO consoleInfo = { 0 };
+    WORD saved_attributes = 0;
+    
+    if (!hConsole) {
+        printf("Error -: %lu\n", GetLastError());
+    }
+    else {
+        if (!GetConsoleScreenBufferInfo(hConsole, &consoleInfo)) {
+            printf("Error -: %lu\n", GetLastError());
+        }
+    }
+    
+    saved_attributes = consoleInfo.wAttributes;   
+    
+    if (hConsole!=0) {
+        if (!SetConsoleTextAttribute(hConsole, newColor)) {
+            printf("Error -: %lu\n", GetLastError());
+        }
+    }
     printf("%s", ptr);
-    SetConsoleTextAttribute(hConsole, saved_attributes);
+
+    if (hConsole != 0) {
+        if (!SetConsoleTextAttribute(hConsole, saved_attributes)) {
+            printf("Error -: %lu\n", GetLastError());
+        }
+    }
 }
 
 
-int ProcessCreate1() {
+void ProcessCreate1() {
 
     LPSTR cmdline = "C:\\Windows\\System32\\wbem\\WMIC.exe";
     HANDLE hProcess = INVALID_HANDLE_VALUE;
@@ -80,64 +81,58 @@ int ProcessCreate1() {
     sinfo.cb = sizeof(STARTUPINFOA);
     PROCESS_INFORMATION pinfo = { 0 };
 
-    if (hProcess == INVALID_HANDLE_VALUE) {
+    
         if (!CreateProcessA(NULL, cmdline, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &sinfo, &pinfo))
         {
-            printText("[-] Error creating process: ", FOREGROUND_RED);
-            printf("%d (Check gestlasterror 2 or net HELPMSG 2)\n", GetLastError());
-            return 0;
+            printf("Error -: %lu\n", GetLastError());
         }
         else {
             printf("[+] Process Name : C:\\Windows\\System32\\wbem\\WMIC.exe\n");
-            int createdPID = pinfo.dwProcessId;
-            printf("[+] Process ID   : %d \n", pinfo.dwProcessId);
-            CloseHandle(pinfo.hProcess);
-            CloseHandle(pinfo.hThread);
+            printf("[+] Process ID   : %lu \n", pinfo.dwProcessId);
         }
-    }
-    return 0;
+
+        CloseHandle(pinfo.hProcess);
+        CloseHandle(pinfo.hThread);
 }
 
-int FileCreateTime2() {
+void FileCreateTime2() {
 
     FILETIME ft1 = { 0 };
+    LPCWSTR fileName = { L"SysmonCreateFileTime.txt" };
 
-    HANDLE hFile = CreateFile(
-        L"SysmonCreateFileTime.txt",     // Filename
-        GENERIC_WRITE,          // Desired access
-        FILE_SHARE_READ,        // Share mode
-        NULL,                   // Security attributes
-        CREATE_ALWAYS,             // Creates a new file, only if it doesn't already exist
-        FILE_ATTRIBUTE_NORMAL,  // Flags and attributes
-        NULL);                  // Template file handle
+    HANDLE hFile = CreateFileW(
+        fileName,
+        GENERIC_WRITE,          
+        FILE_SHARE_READ,        
+        NULL,                   
+        CREATE_ALWAYS,          
+        FILE_ATTRIBUTE_NORMAL,  
+        NULL);                  
 
     if (hFile == INVALID_HANDLE_VALUE)
     {
-        // Failed to open/create file
-        printf("[-] Could not create file SysmonCreateFileTime.txt. Error code is: %d\n", GetLastError());
-        return 2;
+        printf("[-] Could not create file SysmonCreateFileTime.txt. Error code is: %lu\n", GetLastError());
     }
     else {
-        printf("[+] File Creation: SysmonCreateFileTime.txt is created in the same directory\n");
+        printf("[+] File Creation: %s is created in the same directory\n", (char *)fileName);
     }
     ft1.dwLowDateTime = ft1.dwLowDateTime - 900000000;
     if (!SetFileTime(hFile, &ft1, NULL, NULL)) {
-        printf("[-] Error changing file creation time : %d\n", GetLastError());
+        printf("[-] Error changing file creation time : %lu\n", GetLastError());
     }
     else {
         printf("[+] Time changed : Creation time of file SysmonCreateFileTime.txt is changed\n");
     }
-
-    return 0;
+    CloseHandle(hFile);
 }
 
-int NetworkConnect3() {
-    WSADATA version;
+void NetworkConnect3() {
+    WSADATA version = {0};
     WSAStartup(MAKEWORD(2, 2), &version);
     u_short port = 31337;
 
-    SOCKET newSocket;
-    struct sockaddr_in addr;
+    SOCKET newSocket = {0};
+    struct sockaddr_in addr = { 0 };
     newSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
     addr.sin_family = AF_INET;
     addr.sin_addr.s_addr = inet_addr("45.33.32.156");
@@ -153,62 +148,43 @@ int NetworkConnect3() {
 
     closesocket(newSocket);
     WSACleanup();
-    return 0;
 }
 
-int processtermination5(process_id)
+void processtermination5(int process_id)
 {
-    HANDLE hProcessToKill;
+    HANDLE hProcessToKill = NULL;
     hProcessToKill = OpenProcess(PROCESS_ALL_ACCESS, FALSE, process_id);
     if (hProcessToKill == NULL) {
-        printf("[-] Error getting handle for PID %d. Error code is : %d\n", process_id, GetLastError());
+        printf("[-] Error getting handle for PID %d. Error code is : %lu\n", process_id, GetLastError());
     }
     else
     {
         TerminateProcess(hProcessToKill, 1);
         CloseHandle(hProcessToKill);
     }
-    return 0;
 }
 
-int driverLoad6() {
-    printText("\nHint: \n\n", FOREGROUND_GREEN);
+void driverLoad6() {
+    printText("\nSteps to generate Driver Load event log: \n\n", FOREGROUND_GREEN);
     printf(" -> Go to Settings >> Windows Security >> Virus & threat protection settings  \n -> Disable Real-time protection \n -> Enable Real-time protection\n\n");
-    printText(" This will load C:\\Windows\\System32\\drivers\\wd\\WdNisDrv.sys which is Microsoft Network Realtime Inspection Driver file\n", FOREGROUND_GREEN);
-
-    //ULONG t;
-    //HRESULT load;
-    //HRESULT unload;
-    //LPCWSTR driver = L"SysmonDrv";
-    //_RtlAdjustPrivilege RtlAdjustPrivilege = (_RtlAdjustPrivilege)GetProcAddress(GetModuleHandle(L"ntdll"), "RtlAdjustPrivilege");
-
-    //RtlAdjustPrivilege(012, TRUE, FALSE, &t);
-    //unload = FilterUnload(driver);
-    //wprintf(L"%ls", unload == S_OK ?
-    //    L"Sysmon Driver unloaded successfully \n" :
-    //    L"An Error Occured. Check Privs\n"
-    //);
-
-    //load = ZwloadDriver(driver);
-    //wprintf(L"%ls", load == S_OK ?
-    //    L"Sysmon Driver loaded back successfully\n" :
-    //    L"An Error Occured. Check Privs\n"
-    //);
-
-    return 0;
+    printText(" This will load C:\\Windows\\System32\\drivers\\wd\\WdNisDrv.sys which is Microsoft Network Realtime Inspection Driver file\r\n\n", FOREGROUND_GREEN);
 }
 
-int ImageLoaded7() {
+void ImageLoaded7() {
     HMODULE hntdll = LoadLibraryA("crypt32.dll");
     if (hntdll) {
-        wprintf(L"[+] Image Loaded : Loaded crypt32.dll\n");
+        printf("[+] Image Loaded : Loaded crypt32.dll\n");
+        FreeLibrary(hntdll);
+        CloseHandle(hntdll);
     }
-    return 0;
+    else
+    {
+        printf("Error -: %lu\n", GetLastError());
+    }
 }
 
-int createRemoteThread8() {
+void createRemoteThread8() {
     HANDLE processHandle;
-    HANDLE rThread;
     PVOID buff;
     LPSTR cmdline = "C:\\Windows\\System32\\PING.exe";
     HANDLE hProcess = INVALID_HANDLE_VALUE;
@@ -250,10 +226,9 @@ int createRemoteThread8() {
         "\xE9\x14\xFF\xFF\xFF\x48\x03\xC3\x48\x83\xC4\x28\xC3";
 
 
-    if (hProcess == INVALID_HANDLE_VALUE) {
         if (CreateProcessA(NULL, cmdline, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &sinfo, &pinfo)) {
             int process_id = pinfo.dwProcessId;
-            printf("[+] Inject into  : PID %i\n", process_id);
+            printf("[+] Inject into  : PID %lu\n", process_id);
 
             processHandle = OpenProcess(PROCESS_ALL_ACCESS, FALSE, process_id);
             printf("[+] Opened process's handle\n");
@@ -262,40 +237,67 @@ int createRemoteThread8() {
 
             if (buff) {
                 WriteProcessMemory(processHandle, buff, shellcode, sizeof(shellcode), NULL);
-                rThread = CreateRemoteThread(processHandle, NULL, 0, (LPTHREAD_START_ROUTINE)buff, NULL, 0, NULL);
+                CreateRemoteThread(processHandle, NULL, 0, (LPTHREAD_START_ROUTINE)buff, NULL, 0, NULL);
                 printf("[+] Created Remote Thread\n");
                 printf("[+] Closed Handle to the process\n");
             }
             else {
-                printf("[-] Error code is : %d\n", GetLastError());
+                printf("[-] Error code is : %lu\n", GetLastError());
             }
-
+            
             CloseHandle(pinfo.hProcess);
             CloseHandle(pinfo.hThread);
         }
-    }
-
-    return 0;
 }
 
-int processaccess10(process_id) {
+DWORD rawaccessread9() {
 
-    printf("Opening process with PID: %lu\n", process_id);
-    HANDLE hProcessToAccess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, process_id);
-    if (!hProcessToAccess) {
-        printf("Err 0: %lu\n", GetLastError());
-        return 0;
+    PTCHAR deviceName = _T("\\\\.\\C:");
+    PWCHAR search = _T("*lsass*.dmp");
+    HANDLE hfileHandle = INVALID_HANDLE_VALUE;
+
+    hfileHandle = CreateFile(
+        deviceName,
+        FILE_WRITE_ATTRIBUTES,
+        FILE_SHARE_READ | FILE_SHARE_WRITE,
+        NULL,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        NULL
+    );
+
+    if (hfileHandle == INVALID_HANDLE_VALUE)
+    {
+        printf("\r\nERROR code is : %lu\r\n", GetLastError());
+        if (GetLastError() == 5) {
+            printText("\r\n[!] This command requires administrator privileges\r\n\n", FOREGROUND_RED);
+            return GetLastError();
+        }
     }
     else
     {
-        printf("Opening process handle\n");
-        CloseHandle(hProcessToAccess);
+        printf("[+] Successful   : Successfully created RawAccessRead Event\r\n");
+        CloseHandle(hfileHandle);
     }
-    return 0;
+    return GetLastError();
 }
 
-int fileCreate11() {
-    HANDLE hFile = CreateFile(
+void processaccess10(int process_id) {
+
+    printf("[+] ProcessAccess: Process ID %lu\n", process_id);
+    HANDLE hProcessToAccess = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, process_id);
+    if (hProcessToAccess) {
+        printf("[+] Successful   : Process handle was opened\n");
+        CloseHandle(hProcessToAccess);
+    }
+    else
+    {
+        printf("Error code is : %lu\n", GetLastError());
+    }
+}
+
+void fileCreate11() {
+    HANDLE hFile = CreateFileW(
         L"NewFile.bat",
         GENERIC_WRITE,
         FILE_SHARE_READ,
@@ -306,22 +308,20 @@ int fileCreate11() {
 
     if (hFile == INVALID_HANDLE_VALUE)
     {
-        printf("[!] Could not create file NewFile.bat\n");
-        return 2;
+        printf("[!] Error creating file. Error code is : %lu\n", GetLastError());
     }
     else {
         printf("[+] Created File : NewFile.bat\n");
         CloseHandle(hFile);
     }
-    return 0;
 }
 
 
 BOOL CreateRegistryKey()
 {
-    HKEY  hKey;
+    HKEY  hKey = NULL;
     if (RegCreateKeyA(HKEY_CURRENT_USER, "TestSysmon", &hKey) != ERROR_SUCCESS) {
-        printf("[!] Error opening or creating key.\n");
+        printf("[!] Error opening or creating key. Error code is : %lu\n", GetLastError());
         return FALSE;
     }
     else {
@@ -332,7 +332,7 @@ BOOL CreateRegistryKey()
 
 BOOL writeStringInRegistry()
 {
-    HKEY hKey;
+    HKEY hKey = NULL;
     if (RegOpenKeyEx(HKEY_CURRENT_USER, L"TestSysmon", 0, KEY_WRITE, &hKey) == ERROR_SUCCESS)
     {
         if (ERROR_SUCCESS != RegSetValueEx(hKey, L"Message", 0, REG_SZ, (LPBYTE)(L"Testing"), ((((DWORD)strlen("Tested") + 1)) * 2)))
@@ -347,66 +347,69 @@ BOOL writeStringInRegistry()
     return FALSE;
 }
 
-INT registryEvent12()
+void registryEvent12()
 {
-    BOOL status;
-    status = CreateRegistryKey();
-
-    if (status != TRUE)
-        return FALSE;
-    else {
+    if(CreateRegistryKey()) {
         printf("[+] Successful   : Registry object created\n");
     }
-    return 0;
+    else {
+        printf("Error code is : %lu\n", GetLastError());
+    }
 }
 
-INT registryEvent13()
+void registryEvent13()
 {
-    BOOL status;
-
     HKEY subKey = NULL;
     LONG result = RegOpenKeyEx(HKEY_CURRENT_USER, L"TestSysmon", 0, KEY_READ, &subKey);
     if (result != ERROR_SUCCESS) {
         CreateRegistryKey();
     }
-    status = writeStringInRegistry(); //write string
-    if (status != TRUE)
-        return FALSE;
-    printf("[+] Successful   : Registry value modified to 'Tested'\n");
-
-    return 0;
+    if (writeStringInRegistry()) {
+        printf("[+] Successful   : Registry value modified to 'Tested'\n");
+    }
+    else {
+        printf("Error code is : %lu\n", GetLastError());
+    }
 }
 
-INT registryEvent14()
+void registryEvent14()
 {
+    HKEY  hKey = NULL;
+    if (RegCreateKeyA(HKEY_CURRENT_USER, "NewRegistrySysmonTesting", &hKey) != ERROR_SUCCESS) {
+        printf("[!] Error opening or creating key. Error code is : %lu\n", GetLastError());
+    }
+    else {
+        RegCloseKey(hKey);
+    }
+    
     RegRenameKey(
         HKEY_CURRENT_USER,
-        L"TestSysmon",
-        L"TestSysmonRenamed"
+        L"NewRegistrySysmonTesting",
+        L"RegistrySysmonTestingRenamed"
     );
-    return 0;
 }
 
-
-int fileCreateStreamHash15() {
-    DWORD dwRet;
-    static const char testdata[] = "Hello World";
+void fileCreateStreamHash15() {
+    DWORD dwRet = 0;
+    char testdata[] = "Hello World";
     WIN32_FIND_STREAM_DATA streaminfo = { 0 };
     HANDLE hFile = CreateFileA("Streamfile.txt:SysmonStream", GENERIC_WRITE, FILE_SHARE_WRITE, NULL, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, NULL);
     if (hFile == INVALID_HANDLE_VALUE) {
         printf("[!] Could not create stream for file Streamfile.txt\n");
-        printf("E: %lu\n", GetLastError());
+        printf("Error code is : %lu\n", GetLastError());
     }
     else {
         printf("[+] Successful   : Created stream for file Streamfile.txt\n");
-        WriteFile(hFile, "Sysmon simulator has written in ADS SysmonStream of Streamfile.txt", 67, &dwRet, NULL);
+        if (!WriteFile(hFile, "Sysmon simulator has written in ADS SysmonStream of Streamfile.txt", 67, &dwRet, NULL)) {
+            printf("Error code is : %lu\n", GetLastError());
+            CloseHandle(hFile);
+        }
     }
-    return 0;
 }
 
-int pipeCreated17() {
+void pipeCreated17() {
     HANDLE hPipe = NULL;
-    SECURITY_ATTRIBUTES secAt = { 0 };
+    SECURITY_ATTRIBUTES secAttrib = { 0 };
     static LPCSTR lpName = "\\\\.\\pipe\\sysmontestnamedpipe";
     hPipe = CreateNamedPipeA(lpName,
         PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
@@ -415,22 +418,23 @@ int pipeCreated17() {
         2048,
         2048,
         0,
-        &secAt);
+        &secAttrib);
     if (hPipe == INVALID_HANDLE_VALUE)
     {
-        printf("CreateNamedPipeA(): FAILED\n");
-        return 0;
+        printf("CreateNamedPipeA(): FAILED.Error code is : %lu\n", GetLastError());
     }
     else {
         printf("[+] Successful   : Pipe %s has been created\n", lpName);
+        LocalFree(hPipe);
+        CloseHandle(hPipe);
     }
-    return 0;
 }
 
-int pipeConnect18() {
-    HANDLE hPipe, hConnectPipe;
-    SECURITY_ATTRIBUTES secAt = { 0 };
-    static LPCSTR lpName = "\\\\.\\pipe\\sysmontestconnectpipe";
+void pipeConnect18() {
+    HANDLE hPipe = NULL;
+    HANDLE hConnectPipe = NULL;
+    SECURITY_ATTRIBUTES secAttrib = { 0 };
+    LPCSTR lpName = "\\\\.\\pipe\\sysmontestconnectpipe";
 
     hPipe = CreateNamedPipeA(lpName,
         PIPE_ACCESS_DUPLEX | FILE_FLAG_OVERLAPPED,
@@ -439,30 +443,35 @@ int pipeConnect18() {
         2048,
         2048,
         0,
-        &secAt);
+        &secAttrib);
     if (hPipe == INVALID_HANDLE_VALUE)
     {
-        printf("CreateNamedPipeA(): FAILED\n");
-        return 0;
+        printf("CreateNamedPipeA(): FAILED.Error code is : %lu\n", GetLastError());
     }
     else {
-        printf("[+] Successful   : Pipe %s has been connected\n", lpName);
+        printf("[+] Successful   : Pipe connection event created for pipe %s \n", lpName);
     }
     hConnectPipe = CreateFileA(lpName, GENERIC_READ | GENERIC_WRITE | SYNCHRONIZE, 0, NULL, OPEN_EXISTING, FILE_FLAG_WRITE_THROUGH, NULL);
     if (hConnectPipe == INVALID_HANDLE_VALUE) {
         printf("Error: %lu\n", GetLastError());
-        return 0;
     }
-    CloseHandle(hPipe);
-    return 0;
+    else {
+        if (hPipe != 0) {
+            LocalFree(hPipe);
+            CloseHandle(hPipe);
+        }
+        if (hConnectPipe != 0) {
+            CloseHandle(hConnectPipe);
+        }
+    }
 }
 
-int dnsquery22() {
+void dnsquery22() {
     DWORD response = 0;
     PDNS_RECORD base = NULL;
     DWORD options = DNS_QUERY_WIRE_ONLY;
     PIP4_ARRAY pSrvList = NULL;
-    unsigned short wType = { 0 };
+    unsigned short wType = 0;
 
     response = DnsQuery_A("google.com", wType, options, pSrvList, &base, NULL);
     if (response) {
@@ -470,19 +479,17 @@ int dnsquery22() {
     }
     else {
         printf("[+] Tried to perform lookup for domain 'google.com' but got an error \n");
-        printf("[!} Error is: %lu\n", GetLastError());
+        printf("[!] Error code is: %lu\n", GetLastError());
     }
-    return 0;
 }
 
 
-int setClipboard24() {
+void setClipboard24() {
 
     const char* output = "New Sysmon Test data in clipboard";
     const size_t len = strlen(output) + 1;
 
     HGLOBAL hMem = GlobalAlloc(GMEM_MOVEABLE, len);
-
     if (hMem) {
         memcpy(GlobalLock(hMem), output, len);
         GlobalUnlock(hMem);
@@ -490,13 +497,14 @@ int setClipboard24() {
         EmptyClipboard();
         SetClipboardData(CF_TEXT, hMem);
         CloseClipboard();
+        GlobalFree(hMem);
     }
-
-    return 0;
-
+    else {
+        printf("[!] Error code is: %lu\n", GetLastError());
+    }
 }
 
-int deleteFile26() {
+void deleteFile26() {
     HANDLE hFile = CreateFile(
         L"NewFile.bat",
         GENERIC_WRITE,
@@ -505,13 +513,17 @@ int deleteFile26() {
         CREATE_ALWAYS,
         FILE_ATTRIBUTE_NORMAL,
         NULL);
-    CloseHandle(hFile);
 
-    BOOL deleted = DeleteFile(L"test.txt");
-    if (!deleted) {
-        printf("[-] Error deleting file: %d\n", GetLastError());
+    if (hFile == INVALID_HANDLE_VALUE) {
+        printf("[!] Error code is: %lu\n", GetLastError());
     }
-    return 0;
+    else {
+        CloseHandle(hFile);
+    }
+
+    if (!DeleteFile(L"NewFile.bat")) {
+        printf("[-] Error deleting file: %lu\n", GetLastError());
+    }
 }
 
 int processTampering25()
@@ -533,38 +545,34 @@ int processTampering25()
     memset(&pi, 0, sizeof(pi));
 
     LPSTR replacement = "c:\\windows\\system32\\cmd.exe";
-    LPSTR target = "c:\\Windows\\System32\\svchost.exe";
+    LPSTR targetExe = "c:\\Windows\\System32\\svchost.exe";
 
     if (!CreateProcessA(NULL, replacement, NULL, NULL, FALSE, CREATE_SUSPENDED, NULL, NULL, &si, &pi))
     {
-        printf("\nError: Unable to run the target executable. CreateProcess failed with error %d\n", GetLastError());
+        printf("\nNot able to run the target executable. Error code is : % lu\n", GetLastError());
         return 1;
     }
 
-    hFile = CreateFileA(target, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
+    hFile = CreateFileA(targetExe, GENERIC_READ, FILE_SHARE_READ, NULL, OPEN_EXISTING, 0, NULL);
 
     if (hFile == INVALID_HANDLE_VALUE)
     {
-        printf("\nError: Unable to open the replacement executable. CreateFile failed with error %d\n", GetLastError());
-
+        printf("\nNot able to open the replacement executable. Error code is : % lu\n", GetLastError());
         NtTerminateProcess(pi.hProcess, 1);
         return 1;
     }
 
     nSizeOfFile = GetFileSize(hFile, NULL);
-
     image = VirtualAlloc(NULL, nSizeOfFile, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
 
     if (!ReadFile(hFile, image, nSizeOfFile, &read, NULL))
     {
-        printf("\nError: Unable to read the replacement executable. ReadFile failed with error %d\n", GetLastError());
-
+        printf("\nNot able to read the replacement executable. Error code is : % lu\n", GetLastError());
         NtTerminateProcess(pi.hProcess, 1);
         return 1;
     }
 
     NtClose(hFile);
-
     pDosH = (PIMAGE_DOS_HEADER)image;
 
     if (pDosH->e_magic != IMAGE_DOS_SIGNATURE)
@@ -575,7 +583,6 @@ int processTampering25()
     }
 
     pNtH = (PIMAGE_NT_HEADERS)((LPBYTE)image + pDosH->e_lfanew);
-
     NtGetContextThread(pi.hThread, &ctx);
 
 #ifdef _WIN64
@@ -595,7 +602,7 @@ int processTampering25()
 
     if (!mem)
     {
-        printf("\nError: Unable to allocate memory in child process. VirtualAllocEx failed with error %d\n", GetLastError());
+        printf("\nError: Unable to allocate memory in child process. VirtualAllocEx failed with error %lu\n", GetLastError());
 
         NtTerminateProcess(pi.hProcess, 1);
         return 1;
@@ -635,128 +642,102 @@ int processTampering25()
     return 0;
 }
 
-void wmiactivity()
-{
-    // result code from COM calls
-    HRESULT hr = 0;
+void wmiactivity19() {
 
-    // COM interface pointers
-    IWbemLocator* locator = NULL;
-    IWbemServices* services = NULL;
-    IEnumWbemClassObject* results = NULL;
+    printText("\n[+] Run the following code from an elevated PowerShell console \n\n", FOREGROUND_GREEN);
+    printText("This will create a __EventFilter that will check for a modification of the Win32_Service class every 5 seconds \r\n\n", FOREGROUND_GREEN);
+    printText("# Creating a new event filter\n", FOREGROUND_INTENSITY);
 
-    // BSTR strings we'll use (http://msdn.microsoft.com/en-us/library/ms221069.aspx)
-    BSTR resource = SysAllocString(L"ROOT\\CIMV2");
-    BSTR language = SysAllocString(L"WQL");
-    BSTR query = SysAllocString(L"SELECT * FROM Win32_Processor");
+    printf(
+        "$ServiceFilter = ([wmiclass]\"\\\\.\\root\\subscription:__EventFilter\").CreateInstance()\n"
+        "$ServiceFilter.QueryLanguage = 'WQL'\n"
+        "$ServiceFilter.Query = \"select * from __instanceModificationEvent within 5 where targetInstance isa 'win32_Service'\"\n"
+        "$ServiceFilter.Name = \"ServiceFilter\"\n"
+        "$ServiceFilter.EventNamespace = 'root\\cimv2'\n"
+        "\n"
+    );
+    printText("# Sets the intance in the namespace\n", FOREGROUND_INTENSITY);
+    printf(
+        "$FilterResult = $ServiceFilter.Put()\n"
+        "$ServiceFilterObj = $FilterResult.Path\n\n"
+    );
 
-    // initialize COM
-    hr = CoInitializeEx(0, COINIT_MULTITHREADED);
-    hr = CoInitializeSecurity(NULL, -1, NULL, NULL, RPC_C_AUTHN_LEVEL_DEFAULT, RPC_C_IMP_LEVEL_IMPERSONATE, NULL, EOAC_NONE, NULL);
-
-    // connect to WMI
-    hr = CoCreateInstance(&CLSID_WbemLocator, 0, CLSCTX_INPROC_SERVER, &IID_IWbemLocator, (LPVOID*)&locator);
-    hr = locator->lpVtbl->ConnectServer(locator, resource, NULL, NULL, NULL, 0, NULL, NULL, &services);
-
-    // issue a WMI query
-    hr = services->lpVtbl->ExecQuery(services, language, query, WBEM_FLAG_BIDIRECTIONAL, NULL, &results);
-
-    // list the query results
-    if (results != NULL) {
-        IWbemClassObject* result = NULL;
-        ULONG returnedCount = 0;
-
-        // enumerate the retrieved objects
-        while ((hr = results->lpVtbl->Next(results, WBEM_INFINITE, 1, &result, &returnedCount)) == S_OK) {
-            VARIANT name;
-            VARIANT speed;
-
-            // obtain the desired properties of the next result and print them out
-            hr = result->lpVtbl->Get(result, L"Name", 0, &name, 0, 0);
-            hr = result->lpVtbl->Get(result, L"MaxClockSpeed", 0, &speed, 0, 0);
-            wprintf(L"%s, %dMHz\r\n", name.bstrVal, speed.intVal);
-
-            // release the current result object
-            result->lpVtbl->Release(result);
-        }
-    }
-
-    // release WMI COM interfaces
-    results->lpVtbl->Release(results);
-    services->lpVtbl->Release(services);
-    locator->lpVtbl->Release(locator);
-
-    // unwind everything else we've allocated
-    CoUninitialize();
-
-    SysFreeString(query);
-    SysFreeString(language);
-    SysFreeString(resource);
+    printf("After running these commands, go to event Viewer and check Sysmon Event ID 19 for the event\n\n");
+    printText("Note: The action is logged with Event Id 19, and we should be able to see a Data element (under EventData) where the Operation attribute says Created\r\n\n", FOREGROUND_RED);
+    printText("Credits:  Carlos Perez (@darkoperator)\nReference: https://www.darkoperator.com/blog/2017/10/15/sysinternals-sysmon-610-tracking-of-permanent-wmi-events\n\n", FOREGROUND_BLUE);
 }
 
+void wmiactivity20() {
 
-void timestamp()
-{
+    printText("\n[+] Run the following code from an elevated PowerShell console \n\n", FOREGROUND_GREEN);
+    printf("Run this PowerShell Code in the existing window where we created the filter (for event ID 19)\r\n\n");
+    printText("This will create a consumer that will create a log file on the C:\\ drive\r\n\n", FOREGROUND_GREEN);
+
+    printText("# Creating a new event consumer \n", FOREGROUND_INTENSITY);
+    printf("$LogConsumer = ([wmiclass]\"\\\\.\\root\\subscription:LogFileEventConsumer\").CreateInstance()\n\n");
+    
+    printText("# Set properties of consumer\n", FOREGROUND_INTENSITY);
+    printf(
+        "$LogConsumer.Name = 'ServiceConsumer'\n"
+        "$LogConsumer.Filename = \"C:\\Log.log\"\n"
+        "$LogConsumer.Text = 'A change has occurred on the service'\n"
+    );
+
+    printText("# Creating a new event consumer \n", FOREGROUND_INTENSITY);
+    printf(
+        "$LogResult = $LogConsumer.Put()\n"
+        "$LogConsumerObj = $LogResult.Path\r\n\n"
+    );
+
+    printf("After running these commands, go to event Viewer and check Sysmon Event ID 20 for the event\n\n");
+    printText("Note: The action is logged with Event Id 20 and we should be able to see that the LogFileEventConsumer creation was logged and all its properties are parsed under EventData Element of the log structure\r\n\n", FOREGROUND_RED);
+    printText("Credits:  Carlos Perez (@darkoperator)\nReference: https://www.darkoperator.com/blog/2017/10/15/sysinternals-sysmon-610-tracking-of-permanent-wmi-events\n\n", FOREGROUND_BLUE);
+}
+
+void wmiactivity21() {
+
+    printText("\n[+] Run the following code from an elevated PowerShell console \n\n", FOREGROUND_GREEN);
+    printf("Run this PowerShell Code in the existing window where we created the filter (for event ID 19 and 20)\r\n\n");
+    printText("This will create a __FilterToConsumerBinding class instance using the __EventFilterand the LogFileEventConsumer class instance we created earlier \n\n", FOREGROUND_GREEN);
+
+    printText("# Creating new binder\n", FOREGROUND_INTENSITY);
+    printf(
+        "$instanceBinding = ([wmiclass]\"\\\\.\\root\\subscription:__FilterToConsumerBinding\").CreateInstance()\r\n\n"
+
+        "$instanceBinding.Filter = $ServiceFilterObj\n"
+        "$instanceBinding.Consumer = $LogConsumerObj\n"
+        "$result = $instanceBinding.Put()\n"
+        "$newBinding = $result.Path\r\n\n"
+    );
+    printf("After running these commands, go to event Viewer and check Sysmon Event ID 21 for the event\n\n");
+    printText("Note: The action is logged with Event Id 21 and that the Filter and Consumer paths in the CIM Database are included under EventData\r\n\n",FOREGROUND_RED);
+    printText("Credits:  Carlos Perez (@darkoperator)\nReference: https://www.darkoperator.com/blog/2017/10/15/sysinternals-sysmon-610-tracking-of-permanent-wmi-events\n\n", FOREGROUND_BLUE);
+}
+
+void timestamp() {
+
     SYSTEMTIME lt;
     GetLocalTime(&lt);
-    printf("%02d/%02d/%02d at %02d:%02d:%02d\n", lt.wDay, lt.wMonth, lt.wYear, lt.wHour, lt.wMinute, lt.wSecond);
+    printf("%02d/%02d/%02d at %02d:%02d:%02d\r\n\n", lt.wDay, lt.wMonth, lt.wYear, lt.wHour, lt.wMinute, lt.wSecond);
 }
 
 void checkEvent(int eid) {
-    HANDLE hConsole = GetStdHandle(STD_OUTPUT_HANDLE);
-    CONSOLE_SCREEN_BUFFER_INFO consoleInfo;
-    WORD saved_attributes;
-    GetConsoleScreenBufferInfo(hConsole, &consoleInfo);
-    saved_attributes = consoleInfo.wAttributes;
-    SetConsoleTextAttribute(hConsole, FOREGROUND_GREEN);
+
     printf("[+] Event Viewer : Check Sysmon Event ID %d for detection\n", eid);
     printf("[+] Event Time   : Event %d simulation is performed on ", eid);
     timestamp();
-    SetConsoleTextAttribute(hConsole, saved_attributes);
+
 }
 
-int rawaccessread9() {
 
-    PTCHAR deviceName = _T("\\\\.\\C:");
-    PWCHAR search = _T("*lsass*.dmp");
-    HANDLE hfileHandle = INVALID_HANDLE_VALUE;
+void PrintUsage(){
 
-    hfileHandle = CreateFile(
-        deviceName,
-        FILE_WRITE_ATTRIBUTES,
-        FILE_SHARE_READ | FILE_SHARE_WRITE,
-        NULL,
-        OPEN_EXISTING,
-        FILE_ATTRIBUTE_NORMAL,
-        NULL
-    );
-
-    if (INVALID_HANDLE_VALUE == hfileHandle)
-    {
-        printf("\r\nERROR: %u\r\n", GetLastError());
-        if (GetLastError() == 5) {
-            printText("\r\n[!] This command requires administrator privileges\r\n", FOREGROUND_RED);
-        }
-        return 0;
-    }
-    else
-    {
-        printf("Success\r\n");
-    }
-
-
-    return 0;
-}
-
-VOID
-PrintUsage()
-{
     printf("Usage: SysmonSimulator.exe -eid <event id>\n");
 }
 
-VOID
-PrintHelp()
-{
+
+void PrintHelp() {
+
     printf("\nSysmon Simulator v0.1 - Sysmon event simulation utility\n");
     printf("    A Windows utility to simulate Sysmon event logs\n\n");
 
@@ -767,30 +748,32 @@ PrintHelp()
     printf("SysmonSimulator.exe -eid 1\n\n");
 
     printText("Parameters:\n", FOREGROUND_GREEN);
-    printf("-eid 1  : Process creation\n");
-    printf("-eid 2  : A process changed a file creation time\n");
-    printf("-eid 3  : Network connection\n");
-    printf("-eid 5  : Process terminated\n");
-    printf("-eid 6  : Driver loaded\n"); //Pending
-    printf("-eid 7  : Image loaded\n");
-    printf("-eid 8  : CreateRemoteThread\n");
-    printf("-eid 9  : RawAccessRead\n");//Pending
-    printf("-eid 10 : ProcessAccess\n");//Pending
-    printf("-eid 11 : FileCreate\n");
-    printf("-eid 12 : RegistryEvent - Object create and delete\n");
-    printf("-eid 13 : RegistryEvent - Value Set\n");
-    printf("-eid 14 : RegistryEvent - Key and Value Rename\n");
-    printf("-eid 15 : FileCreateStreamHash\n");
-    printf("-eid 16 : ServiceConfigurationChange\n"); //Pending
-    printf("-eid 17 : PipeEvent - Pipe Created\n");
-    printf("-eid 18 : PipeEvent - Pipe Connected\n");
-    printf("-eid 19 : WmiEvent - WmiEventFilter activity detected\n");
-    printf("-eid 20 : WmiEvent - WmiEventConsumer activity detected\n");
-    printf("-eid 21 : WmiEvent - WmiEventConsumerToFilter activity detected\n");
-    printf("-eid 22 : DNSEvent - DNS query\n");
-    printf("-eid 24 : ClipboardChange - New content in the clipboard\n");
-    printf("-eid 25 : ProcessTampering - Process image change\n"); //Pending
-    printf("-eid 26 : FileDeleteDetected - File Delete logged\n\n"); //Pending
+    printf(
+        "-eid 1  : Process creation\n"
+        "-eid 2  : A process changed a file creation time\n"
+        "-eid 3  : Network connection\n"
+        "-eid 5  : Process terminated\n"
+        "-eid 6  : Driver loaded\n"
+        "-eid 7  : Image loaded\n"
+        "-eid 8  : CreateRemoteThread\n"
+        "-eid 9  : RawAccessRead\n"
+        "-eid 10 : ProcessAccess\n"
+        "-eid 11 : FileCreate\n"
+        "-eid 12 : RegistryEvent - Object create and delete\n"
+        "-eid 13 : RegistryEvent - Value Set\n"
+        "-eid 14 : RegistryEvent - Key and Value Rename\n"
+        "-eid 15 : FileCreateStreamHash\n"
+        "-eid 16 : ServiceConfigurationChange\n"
+        "-eid 17 : PipeEvent - Pipe Created\n"
+        "-eid 18 : PipeEvent - Pipe Connected\n"
+        "-eid 19 : WmiEvent - WmiEventFilter activity detected\n"
+        "-eid 20 : WmiEvent - WmiEventConsumer activity detected\n"
+        "-eid 21 : WmiEvent - WmiEventConsumerToFilter activity detected\n"
+        "-eid 22 : DNSEvent - DNS query\n"
+        "-eid 24 : ClipboardChange - New content in the clipboard\n"
+        "-eid 25 : ProcessTampering - Process image change\n"
+        "-eid 26 : FileDeleteDetected - File Delete logged\n\n"
+    );
 
     printText("Description: \n", FOREGROUND_GREEN);
     printf("Enter an event ID from the above parameters list and the related Windows API function is called\nto simulate the attack and Sysmon event log will be generated which can be viewed in the Windows Event Viewer\n\n");
@@ -799,8 +782,7 @@ PrintHelp()
     printf("Sysmon must be installed on the system\n\n");
 }
 
-VOID
-PrintBanner()
+void PrintBanner()
 {
     printText(" __                        __                              \n", FOREGROUND_INTENSITY);
     printText("(_      _ ._ _   _  ._    (_  o ._ _      |  _. _|_  _  ._ \n", FOREGROUND_INTENSITY);
@@ -809,31 +791,33 @@ PrintBanner()
     printText("                                            by @ScarredMonk\n", FOREGROUND_RED);
 }
 
+
 int main(int argc, char* argv[]) {
 
     int eid = 0;
     int process_id = 0;
+    DWORD error = 0;
 
-    //If no args are provided
     if (argc < 2) {
         PrintUsage();
         return 0;
     }
 
-    //If -eid or -help args are provided
-    else if (argc >= 2) {
+    if (argc >= 2) {
         if (strcmp(argv[1], "-eid") == 0 || strcmp(argv[1], "-e") == 0) {
-            if (!argv[2]) {
-                printf("Enter an event ID");
-                return;
-            }
+            if (argc >= 3) {
+                if (!argv[2]) {
+                    printf("Enter an event ID");
+                    return;
+                }
 
-            if (atoi(argv[2]) > 0 && atoi(argv[2]) <= 26) {
-                eid = atoi(argv[2]);
-            }
-            else if (!argv[2] || atoi(argv[2]) > 25 || atoi(argv[2]) < 1) {
-                printf("Enter valid value of *EID* ranging from 1-25\n");
-                return;
+                if (atoi(argv[2]) > 0 && atoi(argv[2]) <= 26) {
+                    eid = atoi(argv[2]);
+                }
+                else if (!argv[2] || atoi(argv[2]) > 25 || atoi(argv[2]) < 1) {
+                    printf("Enter valid value of *EID* ranging from 1-25\n");
+                    return;
+                }
             }
         }
         else if (strcmp(argv[1], "-help") == 0 || strcmp(argv[1], "-h") == 0) {
@@ -847,10 +831,11 @@ int main(int argc, char* argv[]) {
         }
     }
 
+
     switch (eid) {
 
     case 1:
-        printf("[+] Simulation   : Started successfully\n");
+        printf("\r\n[+] Simulation   : Started successfully\n");
         printf("[+] Event Name   : Process Creation Event\n");
         printf("[+] Event ID     : 1\n");
         ProcessCreate1();
@@ -858,7 +843,7 @@ int main(int argc, char* argv[]) {
         break;
 
     case 2:
-        printf("[+] Simulation   : Started successfully\n");
+        printf("\r\n[+] Simulation   : Started successfully\n");
         printf("[+] Event Name   : File Creation Time Change Event\n");
         printf("[+] Event ID     : 2\n");
         FileCreateTime2();
@@ -866,7 +851,7 @@ int main(int argc, char* argv[]) {
         break;
 
     case 3:
-        printf("[+] Simulation   : Started successfully\n");
+        printf("\r\n[+] Simulation   : Started successfully\n");
         printf("[+] Event ID     : 3\n");
         printf("[+] Event Name   : Network Connection Event\n");
         NetworkConnect3();
@@ -874,157 +859,229 @@ int main(int argc, char* argv[]) {
         break;
 
     case 4:
-        printText("[!] Simulation for Event ID 4 is not present (Internal sysmon related event) \n", FOREGROUND_RED);
+        printText("\r\n[!] Simulation for Event ID 4 is not present (Internal sysmon related event) \r\n\n", FOREGROUND_RED);
         break;
 
     case 5:
         printText("If you press Ctrl+c, it will generate process termination log for current process \n", FOREGROUND_RED);
         printf("Or enter another process ID to kill the process:\n>");
         scanf_s("%d", &process_id);
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 5\n");
-        printf("[+] Event Name   : Process Termination Event\n");
-        printf("[+] PID to kill  : %d\n", process_id);
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 5\n"
+            "[+] Event Name   : Process Termination Event\n"
+            "[+] PID to kill  : %d\n", process_id
+        );
         processtermination5(process_id);
         checkEvent(eid);
         break;
 
     case 6:
-        //printf("[+] Simulation   : Started successfully\n"); //Not working right now
-        printf("[+] Event ID     : 6\n");
-        printf("[+] Event Name   : Driver Load Event\n");
+        printf(
+            "\r\n[+] Event ID     : 6\n"
+            "[+] Event Name   : Driver Load Event\n"
+        );
         driverLoad6();
         break;
 
     case 7:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 7\n");
-        printf("[+] Event Name   : Image Load Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 7\n"
+            "[+] Event Name   : Image Load Event\n"
+        );
         ImageLoaded7();
-        printf("[+] Image Loaded : image name ENDS WITH GameChatOverlayExt.dll\n");
         checkEvent(eid);
         break;
 
     case 8:
-        //printf("Enter the process ID of remote process to create a remote thread in it:\n>");
-        //scanf_s("%d", &process_id);
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 8\n");
-        printf("[+] Event Name   : Create Remote Thread Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 8\n"
+            "[+] Event Name   : Create Remote Thread Event\n"
+        );
         createRemoteThread8();
         checkEvent(eid);
         break;
 
     case 9:
-        rawaccessread9();
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 9\n"
+            "[+] Event Name   : RawAccessRead Event\n"
+        );
+        error = rawaccessread9();
+        if (error != 5) {
+            checkEvent(eid);
+        }
         break;
 
     case 10:
-        printf("Enter the process ID of remote process to be opened/accessed:\n>");
+        printf("\r\nEnter the process ID of remote process to be opened/accessed:\n>");
         scanf_s("%d", &process_id);
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 10\n");
-        printf("[+] Event Name   : Process Access Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 10\n"
+            "[+] Event Name   : Process Access Event\n"
+        );
         processaccess10(process_id);
         checkEvent(eid);
         break;
+
     case 11:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 11\n");
-        printf("[+] Event Name   : File Create Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 11\n"
+            "[+] Event Name   : File Create Event\n"
+        );
         fileCreate11();
         checkEvent(eid);
         break;
+
     case 12:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 12\n");
-        printf("[+] Event Name   : Registry Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 12\n"
+            "[+] Event Name   : Registry Event\n"
+        );
         registryEvent12();
         checkEvent(eid);
         break;
+
     case 13:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 13\n");
-        printf("[+] Event Name   : Registry Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 13\n"
+            "[+] Event Name   : Registry Event\n"
+        );
         registryEvent13();
         checkEvent(eid);
-        system("whoami");
         break;
+
     case 14:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 14\n");
-        printf("[+] Event Name   : Registry Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 14\n"
+            "[+] Event Name   : Registry Event\n"
+        );
         registryEvent14();
         checkEvent(eid);
         break;
+
     case 15:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 15\n");
-        printf("[+] Event Name   : Creation of Alternate Data Streams (ADS) Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 15\n"
+            "[+] Event Name   : Creation of Alternate Data Streams (ADS) Event\n"
+        );
         fileCreateStreamHash15();
         checkEvent(eid);
         break;
+
     case 17:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 17\n");
-        printf("[+] Event Name   : Pipe Creation Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 17\n"
+            "[+] Event Name   : Pipe Creation Event\n"
+        );
         pipeCreated17();
         checkEvent(eid);
         break;
+
     case 18:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 18\n");
-        printf("[+] Event Name   : Pipe Connection Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 18\n"
+            "[+] Event Name   : Pipe Connection Event\n"
+        );
         pipeConnect18();
         checkEvent(eid);
         break;
+
     case 19:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 19\n");
-        printf("[+] Event Name   : WmiEvent\n");
-        wmiactivity();
-        checkEvent(eid);
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 19\n"
+            "[+] Event Name   : WmiEvent\n"
+        );
+        wmiactivity19();
         break;
+
+    case 20:
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 20\n"
+            "[+] Event Name   : WmiEvent\n"
+        );
+        wmiactivity20();
+        break;
+
+    case 21:
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 21\n"
+            "[+] Event Name   : WmiEvent\n"
+        );
+        wmiactivity21();
+        break;
+
     case 22:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 22\n");
-        printf("[+] Event Name   : DNS Query Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 22\n"
+            "[+] Event Name   : DNS Query Event\n"
+        );
         dnsquery22();
         checkEvent(eid);
         break;
+
     case 23:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 26\n");
-        printf("[+] Event Name   : File deletion Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 26\n"
+            "[+] Event Name   : File deletion Event\n"
+        );
         deleteFile26();
         checkEvent(eid);
         break;
+
     case 24:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 24\n");
-        printf("[+] Event Name   : Clipboard Content Change Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 24\n"
+            "[+] Event Name   : Clipboard Content Change Event\n"
+        );
         setClipboard24();
         checkEvent(eid);
         break;
+
     case 25:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 25\n");
-        printf("[+] Event Name   : Process Tampering Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 25\n"
+            "[+] Event Name   : Process Tampering Event\n"
+        );
         processTampering25();
         checkEvent(eid);
         break;
+
     case 26:
-        printf("[+] Simulation   : Started successfully\n");
-        printf("[+] Event ID     : 26\n");
-        printf("[+] Event Name   : File deletion Event\n");
+        printf(
+            "\r\n[+] Simulation   : Started successfully\n"
+            "[+] Event ID     : 26\n"
+            "[+] Event Name   : File deletion Event\n"
+        );
         deleteFile26();
         checkEvent(eid);
         break;
+
     default:
-        printf("No argument is passed. Enter an event ID to generate event for it\n");
-        printf("Usage   : sysmonSimulator.exe <Event ID>\n");
-        printf("Example : (For event ID 1 i.e. process creation)sysmonSimulator.exe \n");
-        printf("sysmonSimulator.exe 1\n");
+        printf(
+            "\nEnter an event ID to generate event for it\n"
+            "Usage   : sysmonSimulator.exe -eid <Event ID>\n"
+            "Example : (For event ID 1 i.e. process creation)\n"
+            "sysmonSimulator.exe -eid 1\n\n"
+        );
         break;
     }
 
