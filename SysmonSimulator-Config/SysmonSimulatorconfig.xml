@@ -1,0 +1,98 @@
+<Sysmon schemaversion="4.81">
+	<HashAlgorithms>md5,sha256,IMPHASH</HashAlgorithms> <!-- Both MD5 and SHA256 are the industry-standard algorithms. Remove IMPHASH if you do not use DLL import fingerprinting. -->
+	<CheckRevocation/> <!-- Check loaded drivers, log if their code-signing certificate has been revoked, in case malware stole one to sign a kernel driver -->
+	<ArchiveDirectory>DeletedFiles</ArchiveDirectory>
+
+	<EventFiltering>
+		
+
+		<!-- -eid 1 is Working -->
+		<ProcessCreate onmatch="include">
+			<ParentImage name="SysmonSimulator ProcessCreate Simulation for WMIC.exe" condition="end with">SysmonSimulator.exe</ParentImage>
+			<Image condition="end with">wmic.exe</Image>
+		</ProcessCreate>
+
+		<!-- -eid 2 is Working -->
+		<FileCreateTime onmatch="include">
+			<Image name="SysmonSimulator FileCreateTime modification Simulation for SysmonCreateFileTime.txt" condition="end with">SysmonSimulator.exe</Image>
+			<TargetFilename condition="end with">SysmonCreateFileTime.txt
+			</TargetFilename>
+
+		</FileCreateTime>
+		<!-- -eid 3 is Working -->
+		<NetworkConnect onmatch="include">
+			<DestinationPort name="SysmonSimulator Network connect Simulation for NMAP" condition="is">31337</DestinationPort>
+		</NetworkConnect>
+		
+		<!-- -eid 5 is Working -->
+		<ProcessTerminate onmatch="include">
+			<Image name="SysmonSimulator ProcessTerminate Simulation for given process" condition="end with">SysmonSimulator.exe</Image>
+		</ProcessTerminate>
+
+		<DriverLoad onmatch="exclude"></DriverLoad>
+
+		<!-- -eid 7 is Working -->
+		<ImageLoad onmatch="include">
+			<Image condition="end with">SysmonSimulator.exe</Image>	
+			<ImageLoaded condition="end with">crypt32.dll</ImageLoaded>
+		</ImageLoad>
+		<!-- -eid 8 is Working -->
+		<CreateRemoteThread onmatch="include">
+			<SourceImage condition="end with">SysmonSimulator.exe</SourceImage>		
+		</CreateRemoteThread>
+		<!-- -eid 9 is Working -->
+		<RawAccessRead onmatch="include">
+			<Image condition="end with">SysmonSimulator.exe</Image>
+		</RawAccessRead>
+		<!-- -eid 10 is Working -->
+		<ProcessAccess onmatch="include">
+			<SourceImage condition="end with">SysmonSimulator.exe</SourceImage>
+		</ProcessAccess>
+		<!-- -eid 11 is Working -->
+		<FileCreate onmatch="include">
+			<Image condition="end with">SysmonSimulator.exe</Image>
+		</FileCreate>
+		<!-- -eid 12,13,14 are Working -->
+		<RegistryEvent onmatch="include">
+			<Image condition="end with">SysmonSimulator.exe</Image>
+		</RegistryEvent>
+
+		<!-- -eid 15 is Working -->
+		<FileCreateStreamHash onmatch="include">
+			<Image condition="end with">SysmonSimulator.exe</Image>
+		</FileCreateStreamHash>
+
+		<!-- -eid 17 and 18 are Working -->
+		<PipeEvent onmatch="include">
+			<Image condition="end with">SysmonSimulator.exe</Image>
+		</PipeEvent>
+
+		<WmiEvent onmatch="exclude">
+		</WmiEvent>
+
+		<!-- -eid 22 is Working -->
+		<DnsQuery onmatch="include">
+			<Image condition="end with">SysmonSimulator.exe</Image>
+		</DnsQuery>
+
+		<!-- -eid 23 is Working -->
+		<FileDelete onmatch="include">
+			<Image condition="end with">SysmonSimulator.exe</Image>
+		</FileDelete>
+
+		<!-- -eid 24 is Working -->
+		<ClipboardChange onmatch="exclude">
+		</ClipboardChange>
+		
+		<!-- -eid 25 is Working -->
+		<ProcessTampering onmatch="include">
+			<Image name="SysmonSimulator ProcessTampering Simulation" condition="end with">cmd.exe</Image>
+		</ProcessTampering>
+
+		<!-- -eid 26 is Working -->
+		<FileDeleteDetected onmatch="include">			
+			<Image condition="end with">SysmonSimulator.exe</Image>
+		</FileDeleteDetected>
+
+	</EventFiltering>
+</Sysmon>
