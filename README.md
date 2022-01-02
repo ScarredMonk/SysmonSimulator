@@ -3,7 +3,7 @@ SysmonSimulator is an Open source Windows event simulation utility created in C 
 
 Attacks are covered for important Windows events as follows: 
 
-- **Process Events**: Process Creation, Process Termination, Process Access  
+- **Process Events**: Process Creation, Process Termination, Process Access
 - **File Events**: File Create, File Create Time Change, File Stream Creation Hash, File Delete, File Delete Detected
 - **Named Pipes Events**: Named Pipe Creation, Named Pipe Connect events
 - **Registry Actions**: Registry Object create and delete, Value Set, Key and Value Rename
@@ -66,3 +66,4 @@ to simulate the attack and Sysmon event log will be generated which can be viewe
 Prerequisite:
 Sysmon must be installed on the system
 ```
+
