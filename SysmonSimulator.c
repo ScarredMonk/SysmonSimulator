@@ -114,9 +114,11 @@ void FileCreateTime2() {
         printf("[-] Could not create file SysmonCreateFileTime.txt. Error code is: %lu\n", GetLastError());
     }
     else {
-        printf("[+] File Creation: %s is created in the same directory\n", (char *)fileName);
+        printf("[+] File Creation: %S is created in the same directory\n", fileName);
     }
-    ft1.dwLowDateTime = ft1.dwLowDateTime - 900000000;
+    ft1.dwLowDateTime = 2421641397;
+    ft1.dwHighDateTime = 30933186;
+
     if (!SetFileTime(hFile, &ft1, NULL, NULL)) {
         printf("[-] Error changing file creation time : %lu\n", GetLastError());
     }
