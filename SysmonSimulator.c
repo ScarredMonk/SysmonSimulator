@@ -682,7 +682,7 @@ void wmiactivity20() {
     printf(
         "$LogConsumer.Name = 'ServiceConsumer'\n"
         "$LogConsumer.Filename = \"C:\\Log.log\"\n"
-        "$LogConsumer.Text = 'A change has occurred on the service'\n"
+        "$LogConsumer.Text = 'A change has occurred on the service: %%TargetInstance.DisplayName%%'\n"
     );
 
     printText("# Creating a new event consumer \n", FOREGROUND_INTENSITY);
