@@ -1,6 +1,10 @@
 # SysmonSimulator
 SysmonSimulator is an Open source Windows event simulation utility created in C language, that can be used to simulate most of the attacks using WINAPIs. This can be used by Blue teams for testing the EDR detections and correlation rules. I have created it to generate attack data for the relevant Sysmon Event IDs.
 
+## Blogpost: 
+This tool has been explained in the blogpost:
+https://rootdse.org/posts/understanding-sysmon-events/#event-id-10-processaccess
+
 Attacks are covered for important Windows events as follows: 
 
 - **Process Events**: Process Creation, Process Termination, Process Access
