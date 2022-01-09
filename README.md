@@ -3,7 +3,7 @@ SysmonSimulator is an Open source Windows event simulation utility created in C 
 
 ## Blogpost: 
 This tool has been explained in the blogpost:
-https://rootdse.org/posts/understanding-sysmon-events/#event-id-10-processaccess
+https://rootdse.org/posts/understanding-sysmon-events/
 
 Attacks are covered for important Windows events as follows: 
 
